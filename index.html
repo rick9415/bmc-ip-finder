@@ -113,6 +113,8 @@
 
   .link-btn { display: inline-block; padding: 3px 9px; border-radius: 5px; border: 1px solid var(--border); color: var(--blue); font-size: .75rem; text-decoration: none; margin: 1px; transition: background .15s, border-color .15s; }
   .link-btn:hover { background: rgba(88,166,255,.1); border-color: var(--blue); }
+  .copy-btn { background: transparent; cursor: pointer; font-family: inherit; }
+  .copy-btn.copied { color: var(--online); border-color: var(--online); }
 
   /* ── Redfish detail panel ── */
   .rf-panel { background: var(--bg); border-top: 1px solid var(--border); padding: 18px 22px; }
@@ -409,7 +411,8 @@
     const links = [];
     if (ports.HTTP)  links.push(`<a class="link-btn" href="http://${r.ip}"  target="_blank">HTTP</a>`);
     if (ports.HTTPS) links.push(`<a class="link-btn" href="https://${r.ip}" target="_blank">HTTPS</a>`);
-    if (ports.SSH)   links.push(`<a class="link-btn" href="ssh://${r.ip}"   target="_blank">SSH</a>`);
+    if (ports.SSH)   links.push(`<button class="link-btn copy-btn" onclick="copySSH(event,'${r.ip}')">SSH</button>`);
+    links.push(`<button class="link-btn copy-btn" onclick="copyIP(event,'${r.ip}')">複製 IP</button>`);
 
     return `<tr class="host-row${isExp?' expanded':''}" data-ip="${r.ip}">
       <td class="ip-mono"><span class="expand-arrow">▶</span><span class="dot dot-on"></span>${r.ip}${bmcBadge}${rfBadge}</td>
@@ -500,6 +503,26 @@
     if (expandedIPs.has(ip)) expandedIPs.delete(ip);
     else expandedIPs.add(ip);
     render();
+  }
+
+  function copySSH(e, ip) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(`ssh ${ip}`).then(() => {
+      const btn = e.currentTarget;
+      btn.textContent = '已複製！';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'SSH'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+
+  function copyIP(e, ip) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(ip).then(() => {
+      const btn = e.currentTarget;
+      btn.textContent = '已複製！';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '複製 IP'; btn.classList.remove('copied'); }, 1500);
+    });
   }
 
   function ip2n(ip) {
