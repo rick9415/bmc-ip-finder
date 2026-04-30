@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BMC 2600 IP Finder</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --surface3: #21262d;
+    --border: #30363d;
+    --accent: #238636;
+    --accent-h: #2ea043;
+    --danger: #da3633;
+    --warning: #e3b341;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --online: #3fb950;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --r: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* header */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  .logo { width: 34px; height: 34px; background: linear-gradient(135deg,#1f6feb,#238636); border-radius: 7px; display: grid; place-items: center; font-size: 16px; font-weight: 700; color: #fff; }
+  header h1 { font-size: 1.05rem; font-weight: 600; }
+  header .sub { font-size: .75rem; color: var(--muted); }
+
+  /* layout */
+  main { max-width: 1300px; margin: 0 auto; padding: 22px; }
+
+  /* panels */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 20px; margin-bottom: 16px; }
+  .panel-title { font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+
+  /* control row */
+  .ctrl-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 170px; }
+  .field label { font-size: .75rem; color: var(--muted); font-weight: 500; }
+  .field input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 11px; font-size: .88rem; outline: none; transition: border-color .2s; }
+  .field input:focus { border-color: var(--blue); }
+  .field input[type=password] { letter-spacing: .1em; }
+
+  .btn { padding: 7px 18px; border: none; border-radius: 6px; font-size: .88rem; font-weight: 600; cursor: pointer; transition: background .15s, opacity .15s; white-space: nowrap; }
+  .btn-green  { background: var(--accent); color: #fff; }
+  .btn-green:hover { background: var(--accent-h); }
+  .btn-red    { background: var(--danger); color: #fff; }
+  .btn-red:hover { opacity: .85; }
+  .btn-blue   { background: #1f6feb; color: #fff; }
+  .btn-blue:hover { background: #388bfd; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* progress */
+  .prog-wrap { display: none; margin-top: 12px; }
+  .prog-wrap.on { display: block; }
+  .prog-info { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 5px; }
+  .prog-bg { background: var(--bg); border: 1px solid var(--border); border-radius: 99px; height: 7px; overflow: hidden; }
+  .prog-bar { height: 100%; border-radius: 99px; transition: width .3s; width: 0%; }
+  .prog-bar.green  { background: linear-gradient(90deg, #1f6feb, #238636); }
+  .prog-bar.purple { background: linear-gradient(90deg, #6e40c9, #bc8cff); }
+
+  /* stats */
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 18px; flex: 1; min-width: 120px; }
+  .stat .lbl { font-size: .72rem; color: var(--muted); margin-bottom: 3px; }
+  .stat .val { font-size: 1.45rem; font-weight: 700; }
+  .green { color: var(--online); } .blue { color: var(--blue); } .yellow { color: var(--warning); } .purple { color: var(--purple); }
+
+  /* filter */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .filter-bar input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 11px; font-size: .83rem; outline: none; flex: 1; min-width: 160px; }
+  .filter-bar input:focus { border-color: var(--blue); }
+  .tog-btns { display: flex; gap: 5px; }
+  .tog { padding: 5px 13px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: .78rem; cursor: pointer; transition: all .15s; }
+  .tog.on { background: var(--surface2); border-color: var(--blue); color: var(--blue); }
+
+  /* table */
+  .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: .74rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { color: var(--text); }
+  thead th.sorted .si { opacity: 1; color: var(--blue); }
+  .si { opacity: .35; margin-left: 3px; }
+
+  tbody tr.host-row { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+  tbody tr.host-row:hover { background: var(--surface2); }
+  tbody tr.host-row.expanded { background: var(--surface2); }
+  tbody tr.detail-row { display: none; }
+  tbody tr.detail-row.open { display: table-row; }
+  tbody td { padding: 11px 14px; font-size: .86rem; vertical-align: middle; }
+
+  .ip-mono { font-family: monospace; font-size: .9rem; font-weight: 600; }
+  .mac-mono { font-family: monospace; font-size: .82rem; letter-spacing: .04em; }
+  .muted-cell { color: var(--muted); font-size: .79rem; }
+  .expand-arrow { display: inline-block; margin-right: 6px; transition: transform .2s; color: var(--muted); font-size: .8rem; }
+  tr.expanded .expand-arrow { transform: rotate(90deg); }
+
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 99px; font-size: .7rem; font-weight: 600; margin: 1px; }
+  .b-green  { background: rgba(63,185,80,.12);  color: #3fb950; border: 1px solid rgba(63,185,80,.28); }
+  .b-blue   { background: rgba(88,166,255,.12); color: #58a6ff; border: 1px solid rgba(88,166,255,.28); }
+  .b-orange { background: rgba(227,179,65,.12); color: #e3b341; border: 1px solid rgba(227,179,65,.28); }
+  .b-purple { background: rgba(188,140,255,.12);color: #bc8cff; border: 1px solid rgba(188,140,255,.28); }
+  .b-red    { background: rgba(218,54,51,.12);  color: #f85149; border: 1px solid rgba(218,54,51,.28); }
+  .b-gray   { background: rgba(139,148,158,.08);color: #8b949e; border: 1px solid rgba(139,148,158,.2); }
+
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-on  { background: var(--online); box-shadow: 0 0 5px var(--online); }
+
+  .link-btn { display: inline-block; padding: 3px 9px; border-radius: 5px; border: 1px solid var(--border); color: var(--blue); font-size: .75rem; text-decoration: none; margin: 1px; transition: background .15s, border-color .15s; }
+  .link-btn:hover { background: rgba(88,166,255,.1); border-color: var(--blue); }
+
+  /* ── Redfish detail panel ── */
+  .rf-panel { background: var(--bg); border-top: 1px solid var(--border); padding: 18px 22px; }
+  .rf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .rf-section { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 14px 16px; }
+  .rf-section h4 { font-size: .72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .rf-rows { display: flex; flex-direction: column; gap: 5px; }
+  .rf-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .82rem; }
+  .rf-row .k { color: var(--muted); flex-shrink: 0; }
+  .rf-row .v { text-align: right; word-break: break-all; font-family: monospace; font-size: .8rem; }
+  .rf-loading { color: var(--muted); font-size: .83rem; padding: 10px 0; }
+  .rf-error   { color: #f85149; font-size: .82rem; padding: 6px 0; }
+  .pw-state-On     { color: var(--online); font-weight: 600; }
+  .pw-state-Off    { color: var(--muted); }
+  .health-OK       { color: var(--online); }
+  .health-Warning  { color: var(--warning); }
+  .health-Critical { color: #f85149; }
+
+  /* empty */
+  .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+  .empty .icon { font-size: 2.8rem; margin-bottom: 10px; }
+
+  footer { text-align: center; padding: 18px; font-size: .72rem; color: var(--muted); border-top: 1px solid var(--border); margin-top: 24px; }
+
+  @media (max-width: 700px) {
+    thead th:nth-child(2), tbody td:nth-child(2),
+    thead th:nth-child(4), tbody td:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">B</div>
+  <div>
+    <h1>BMC 2600 IP Finder</h1>
+    <div class="sub">掃描區域網路中所有已上線的 BMC 2600 設備</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Scan panel ── -->
+  <div class="panel">
+    <div class="panel-title">網路掃描</div>
+    <div class="ctrl-row">
+      <div class="field">
+        <label>掃描子網路（留空自動偵測）</label>
+        <input id="subnetInput" type="text" placeholder="例：192.168.1.0/24">
+      </div>
+      <button class="btn btn-green" id="btnScan" onclick="startScan()">開始掃描</button>
+      <button class="btn btn-red"   id="btnStop" onclick="stopScan()" disabled>停止</button>
+    </div>
+    <div class="prog-wrap" id="scanProg">
+      <div class="prog-info"><span id="scanLabel">掃描中…</span><span id="scanPct">0%</span></div>
+      <div class="prog-bg"><div class="prog-bar green" id="scanBar"></div></div>
+    </div>
+  </div>
+
+  <!-- ── Redfish panel ── -->
+  <div class="panel">
+    <div class="panel-title">Redfish 查詢認證</div>
+    <div class="ctrl-row">
+      <div class="field">
+        <label>帳號</label>
+        <input id="rfUser" type="text" placeholder="admin" value="admin">
+      </div>
+      <div class="field">
+        <label>密碼</label>
+        <input id="rfPass" type="password" placeholder="••••••" value="Admin+123">
+      </div>
+      <button class="btn btn-blue" id="btnRF" onclick="startRedfish()">Redfish 查詢全部 BMC</button>
+    </div>
+    <div class="prog-wrap" id="rfProg">
+      <div class="prog-info"><span id="rfLabel">查詢中…</span><span id="rfPct">0%</span></div>
+      <div class="prog-bg"><div class="prog-bar purple" id="rfBar"></div></div>
+    </div>
+  </div>
+
+  <!-- stats -->
+  <div class="stats">
+    <div class="stat"><div class="lbl">已掃描 IP</div><div class="val" id="stScanned">—</div></div>
+    <div class="stat"><div class="lbl">在線主機</div><div class="val green" id="stOnline">—</div></div>
+    <div class="stat"><div class="lbl">BMC 候選</div><div class="val blue"  id="stBMC">—</div></div>
+    <div class="stat"><div class="lbl">Redfish 已取得</div><div class="val purple" id="stRF">—</div></div>
+    <div class="stat"><div class="lbl">子網路</div><div class="val yellow" id="stSubnet">—</div></div>
+  </div>
+
+  <!-- filter -->
+  <div class="filter-bar">
+    <input id="filterQ" type="text" placeholder="搜尋 IP、MAC、主機名稱、型號…" oninput="render()">
+    <div class="tog-btns">
+      <button class="tog"    id="togAll" onclick="setMode('all')">全部</button>
+      <button class="tog on" id="togBMC" onclick="setMode('bmc')">僅 BMC</button>
+      <button class="tog"    id="togRF"  onclick="setMode('rf')">有 Redfish</button>
+    </div>
+  </div>
+
+  <!-- table -->
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('ip')">IP 位址 <span class="si">↕</span></th>
+          <th onclick="sortBy('mac')">MAC 位址 <span class="si">↕</span></th>
+          <th onclick="sortBy('hostname')">主機名稱 <span class="si">↕</span></th>
+          <th onclick="sortBy('ipmi')">IPMI <span class="si">↕</span></th>
+          <th>開放服務</th>
+          <th>快速連結</th>
+          <th onclick="sortBy('timestamp')">時間 <span class="si">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty">
+      <div class="icon">📡</div>
+      <p>尚無資料，請點擊「開始掃描」</p>
+    </div>
+  </div>
+
+</main>
+
+<footer>BMC 2600 IP Finder &nbsp;·&nbsp; 僅供內部網路管理使用</footer>
+
+<script>
+  let allResults = [];
+  let filterMode = 'bmc';
+  let sortCol = 'ip', sortAsc = true;
+  let scanTimer = null, rfTimer = null;
+  let expandedIPs = new Set();
+
+  // ── API ──────────────────────────────────────────────────────────
+  const api = url => fetch(url).then(r => r.json());
+
+  // ── Scan ─────────────────────────────────────────────────────────
+  async function startScan() {
+    const subnet = document.getElementById('subnetInput').value.trim();
+    const url = '/api/start' + (subnet ? `?subnet=${encodeURIComponent(subnet)}` : '');
+    const d = await api(url);
+    if (!d.ok) { alert(d.msg); return; }
+    expandedIPs.clear();
+    allResults = [];
+    document.getElementById('btnScan').disabled = true;
+    document.getElementById('btnStop').disabled = false;
+    document.getElementById('scanProg').classList.add('on');
+    render();
+    startScanPoll();
+  }
+
+  async function stopScan() { await api('/api/stop'); }
+
+  function startScanPoll() {
+    if (scanTimer) clearInterval(scanTimer);
+    scanTimer = setInterval(pollScan, 1100);
+    pollScan();
+  }
+
+  async function pollScan() {
+    const s = await api('/api/status');
+    allResults = s.results || [];
+
+    const pct = s.total > 0 ? Math.min(100, Math.round(s.progress / s.total * 100)) : 0;
+    document.getElementById('scanBar').style.width = pct + '%';
+    document.getElementById('scanPct').textContent = pct + '%';
+    document.getElementById('scanLabel').textContent = s.running
+      ? `掃描中 ${s.progress} / ${s.total}…`
+      : s.finished_at ? `完成於 ${s.finished_at}` : '準備中…';
+
+    updateStats(s);
+    render();
+
+    if (!s.running) {
+      clearInterval(scanTimer);
+      document.getElementById('btnScan').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+      document.getElementById('scanLabel').textContent = s.error
+        ? '錯誤：' + s.error
+        : `掃描完成 — ${allResults.length} 台在線，${allResults.filter(r=>r.is_bmc).length} 台 BMC 候選`;
+    }
+  }
+
+  // ── Redfish ───────────────────────────────────────────────────────
+  async function startRedfish() {
+    const user = document.getElementById('rfUser').value.trim();
+    const pass = document.getElementById('rfPass').value;
+    const url = `/api/redfish_fetch?user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+    const d = await api(url);
+    if (!d.ok) { alert(d.msg); return; }
+    document.getElementById('btnRF').disabled = true;
+    document.getElementById('rfProg').classList.add('on');
+    startRFPoll();
+  }
+
+  function startRFPoll() {
+    if (rfTimer) clearInterval(rfTimer);
+    rfTimer = setInterval(pollRF, 1200);
+    pollRF();
+  }
+
+  async function pollRF() {
+    const [rfs, scan] = await Promise.all([api('/api/redfish_status'), api('/api/status')]);
+    allResults = scan.results || [];
+
+    const pct = rfs.total > 0 ? Math.min(100, Math.round(rfs.done / rfs.total * 100)) : 0;
+    document.getElementById('rfBar').style.width = pct + '%';
+    document.getElementById('rfPct').textContent = pct + '%';
+    document.getElementById('rfLabel').textContent = rfs.running
+      ? `Redfish 查詢中 ${rfs.done} / ${rfs.total}…`
+      : `完成 — 共查詢 ${rfs.total} 台`;
+
+    updateStats(scan);
+    render();
+
+    if (!rfs.running) {
+      clearInterval(rfTimer);
+      document.getElementById('btnRF').disabled = false;
+    }
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────
+  function updateStats(s) {
+    document.getElementById('stScanned').textContent = s.total || '—';
+    document.getElementById('stOnline').textContent  = allResults.length || '—';
+    document.getElementById('stBMC').textContent     = allResults.filter(r=>r.is_bmc).length || '—';
+    document.getElementById('stRF').textContent      = allResults.filter(r=>r.redfish?.auth_ok).length || '—';
+    document.getElementById('stSubnet').textContent  = (s.subnets||[]).join(', ') || '—';
+  }
+
+  // ── Filter / Sort ─────────────────────────────────────────────────
+  function setMode(m) {
+    filterMode = m;
+    document.getElementById('togAll').classList.toggle('on', m === 'all');
+    document.getElementById('togBMC').classList.toggle('on', m === 'bmc');
+    document.getElementById('togRF').classList.toggle('on',  m === 'rf');
+    render();
+  }
+
+  function sortBy(col) {
+    sortAsc = sortCol === col ? !sortAsc : true;
+    sortCol = col;
+    document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
+    const cols = ['ip','mac','hostname','ipmi','ports','links','timestamp'];
+    document.querySelectorAll('thead th')[cols.indexOf(col)]?.classList.add('sorted');
+    render();
+  }
+
+  // ── Render ────────────────────────────────────────────────────────
+  function render() {
+    const q = document.getElementById('filterQ').value.trim().toLowerCase();
+    let rows = allResults.filter(r => {
+      if (filterMode === 'bmc' && !r.is_bmc) return false;
+      if (filterMode === 'rf'  && !r.redfish?.auth_ok) return false;
+      if (q) {
+        const rf = r.redfish || {};
+        const sys = rf.system || {};
+        const hay = [r.ip, r.mac||'', r.hostname||'', sys.model||'', sys.manufacturer||'', sys.serial||''].join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    rows.sort((a,b) => {
+      let av, bv;
+      if (sortCol === 'ip')   { av = ip2n(a.ip); bv = ip2n(b.ip); }
+      else if (sortCol === 'ipmi') { av = a.ipmi?1:0; bv = b.ipmi?1:0; }
+      else { av = (a[sortCol]||'').toLowerCase(); bv = (b[sortCol]||'').toLowerCase(); }
+      return sortAsc ? (av<bv?-1:av>bv?1:0) : (av<bv?1:av>bv?-1:0);
+    });
+
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+    if (!rows.length) { tbody.innerHTML = ''; empty.style.display='block'; return; }
+    empty.style.display = 'none';
+
+    tbody.innerHTML = rows.map(r => hostRow(r) + detailRow(r)).join('');
+
+    // Re-attach expand handlers
+    tbody.querySelectorAll('tr.host-row').forEach(tr => {
+      tr.addEventListener('click', () => toggleExpand(tr.dataset.ip));
+    });
+  }
+
+  function hostRow(r) {
+    const ports = r.ports || {};
+    const isExp = expandedIPs.has(r.ip);
+    const bmcBadge = r.is_bmc ? '<span class="badge b-blue" style="margin-left:5px">BMC</span>' : '';
+    const rfBadge  = r.redfish?.auth_ok ? '<span class="badge b-purple" style="margin-left:3px">RF</span>' : '';
+
+    const portBadges = Object.entries(ports).map(([l,p]) => {
+      const cls = l==='IPMI'?'b-blue':l==='SSH'?'b-orange':'b-green';
+      return `<span class="badge ${cls}">${l}:${p}</span>`;
+    }).join('');
+
+    const links = [];
+    if (ports.HTTP)  links.push(`<a class="link-btn" href="http://${r.ip}"  target="_blank">HTTP</a>`);
+    if (ports.HTTPS) links.push(`<a class="link-btn" href="https://${r.ip}" target="_blank">HTTPS</a>`);
+    if (ports.SSH)   links.push(`<a class="link-btn" href="ssh://${r.ip}"   target="_blank">SSH</a>`);
+
+    return `<tr class="host-row${isExp?' expanded':''}" data-ip="${r.ip}">
+      <td class="ip-mono"><span class="expand-arrow">▶</span><span class="dot dot-on"></span>${r.ip}${bmcBadge}${rfBadge}</td>
+      <td class="mac-mono">${r.mac || '<span style="opacity:.3">—</span>'}</td>
+      <td class="muted-cell">${r.hostname || '<span style="opacity:.3">—</span>'}</td>
+      <td>${r.ipmi ? '<span class="badge b-blue">✓ IPMI</span>' : '<span style="opacity:.3">—</span>'}</td>
+      <td>${portBadges || '<span style="opacity:.3">—</span>'}</td>
+      <td onclick="event.stopPropagation()">${links.join('') || '<span style="opacity:.3">—</span>'}</td>
+      <td class="muted-cell">${r.timestamp||''}</td>
+    </tr>`;
+  }
+
+  function detailRow(r) {
+    const isOpen = expandedIPs.has(r.ip);
+    return `<tr class="detail-row${isOpen?' open':''}" data-ip="${r.ip}">
+      <td colspan="7" style="padding:0">${rfDetail(r)}</td>
+    </tr>`;
+  }
+
+  function rfDetail(r) {
+    const rf = r.redfish;
+    if (!rf) {
+      return `<div class="rf-panel"><span class="rf-loading">尚未查詢 Redfish — 請輸入認證後點擊「Redfish 查詢全部 BMC」</span></div>`;
+    }
+    if (!rf.reachable) {
+      return `<div class="rf-panel"><span class="rf-error">Redfish 無回應</span></div>`;
+    }
+    if (!rf.auth_ok) {
+      return `<div class="rf-panel"><span class="rf-error">${rf.error || '認證失敗'}</span></div>`;
+    }
+
+    const sys = rf.system || {};
+    const bmc = rf.bmc   || {};
+    const eths = rf.ethernet || [];
+
+    const kv = (k, v) => v ? `<div class="rf-row"><span class="k">${k}</span><span class="v">${v}</span></div>` : '';
+    const pwCls = sys.power_state === 'On' ? 'pw-state-On' : 'pw-state-Off';
+    const hCls  = h => h ? `health-${h}` : '';
+
+    const sysHtml = `
+      <div class="rf-section">
+        <h4>🖥 系統資訊</h4>
+        <div class="rf-rows">
+          ${kv('製造商', sys.manufacturer)}
+          ${kv('型號',   sys.model)}
+          ${kv('序號',   sys.serial)}
+          ${kv('零件號', sys.part_number)}
+          ${kv('SKU',    sys.sku)}
+          ${kv('主機名', sys.hostname)}
+          ${sys.power_state ? `<div class="rf-row"><span class="k">電源狀態</span><span class="v ${pwCls}">${sys.power_state}</span></div>` : ''}
+          ${sys.health ? `<div class="rf-row"><span class="k">健康狀態</span><span class="v ${hCls(sys.health)}">${sys.health}</span></div>` : ''}
+          ${kv('BIOS 版本', sys.bios_version)}
+          ${sys.cpu_count !== '' && sys.cpu_count !== undefined ? kv('CPU 數量', sys.cpu_count) : ''}
+          ${kv('CPU 型號', sys.cpu_model)}
+          ${sys.memory_gib !== '' && sys.memory_gib !== undefined ? kv('記憶體', sys.memory_gib + ' GiB') : ''}
+        </div>
+      </div>`;
+
+    const bmcHtml = `
+      <div class="rf-section">
+        <h4>⚙ BMC 管理控制器</h4>
+        <div class="rf-rows">
+          ${kv('韌體版本', bmc.firmware)}
+          ${kv('型號',     bmc.model)}
+          ${bmc.health ? `<div class="rf-row"><span class="k">健康狀態</span><span class="v ${hCls(bmc.health)}">${bmc.health}</span></div>` : ''}
+          ${kv('Redfish 版本', rf.version)}
+        </div>
+      </div>`;
+
+    const ethHtml = eths.length ? `
+      <div class="rf-section">
+        <h4>🔌 網路介面 (NIC)</h4>
+        <div class="rf-rows">
+          ${eths.map(e => `
+            <div style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;font-size:.78rem;color:var(--muted)">${e.name}</div>
+            ${kv('MAC', e.mac)}
+            ${kv('IPv4', e.ipv4)}
+            ${e.speed_mbps !== '' ? kv('速率', e.speed_mbps + ' Mbps') : ''}
+            ${kv('連線狀態', e.link_up)}
+          `).join('')}
+        </div>
+      </div>` : '';
+
+    return `<div class="rf-panel"><div class="rf-grid">${sysHtml}${bmcHtml}${ethHtml}</div></div>`;
+  }
+
+  function toggleExpand(ip) {
+    if (expandedIPs.has(ip)) expandedIPs.delete(ip);
+    else expandedIPs.add(ip);
+    render();
+  }
+
+  function ip2n(ip) {
+    return ip.split('.').reduce((a,o) => a*256 + parseInt(o,10), 0);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────
+  (async () => {
+    const d = await api('/api/subnets');
+    const detected = (d.subnets||[]).join(', ');
+    if (detected) document.getElementById('subnetInput').placeholder = `自動偵測：${detected}`;
+
+    const s = await api('/api/status');
+    if (s.running) {
+      document.getElementById('btnScan').disabled = true;
+      document.getElementById('btnStop').disabled = false;
+      document.getElementById('scanProg').classList.add('on');
+      startScanPoll();
+    } else if ((s.results||[]).length) {
+      allResults = s.results;
+      updateStats(s);
+      render();
+      // If Redfish was already running, resume polling
+      const rfs = await api('/api/redfish_status');
+      if (rfs.running) {
+        document.getElementById('btnRF').disabled = true;
+        document.getElementById('rfProg').classList.add('on');
+        startRFPoll();
+      }
+    } else {
+      startScan();
+    }
+  })();
+</script>
+</body>
+</html>
